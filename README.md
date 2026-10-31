@@ -99,6 +99,7 @@ Files go to `~/Pictures/Screenshots` (or your system screenshot folder if you se
 | A permission toggle is on but nothing works | The entry is stale. Remove Snapmark from that list with **−**, add `/Applications/Snapmark.app` again, or run `tccutil reset Accessibility com.dustinwoodard.snapmark`. |
 | The system screenshot tool still appears | Turn off the shortcuts in System Settings > Keyboard > Keyboard Shortcuts > Screenshots. |
 | macOS asks for permissions again after an update | Each release must be signed with the same certificate. See [Signing](#signing). |
+| Want to know if there is a newer version | Settings > General > **Check for Updates**. Snapmark also checks once at launch (you can turn that off). To update, run the install command again. |
 | Screenshots or recordings fail | Screen Recording is off. Turn it on, then quit and reopen Snapmark. |
 | No sound in a recording | Turn on Computer sound or Mic on the ⌘⇧5 bar, or under Settings > Video. |
 
@@ -181,7 +182,7 @@ CLAUDE.md             notes for working on this project with Claude Code
 
 ## Privacy
 
-Snapmark makes no network connections and collects nothing. Captures live in your save folder. The editor's history
+Snapmark collects nothing and has no account. Its only network request is an optional update check at launch: it asks GitHub's public releases page which version is newest, and sends no personal data. Turn it off in Settings > General, or run the check by hand there. Captures live in your save folder. The editor's history
 (original images and marks for recent screenshots) is stored in `~/Library/Application Support/Snapmark/History`, and the
 Recent Captures menu can clear it.
 

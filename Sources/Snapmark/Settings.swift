@@ -27,6 +27,7 @@ enum Settings {
     }
 
     static var historyLimit: Int { get { value("historyLimit", 10) } set { store("historyLimit", newValue) } }
+    static var checkForUpdates: Bool { get { value("checkForUpdates", true) } set { store("checkForUpdates", newValue) } }
     static var playSound: Bool { get { value("playSound", false) } set { store("playSound", newValue) } }
 
     // MARK: Capture

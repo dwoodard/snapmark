@@ -96,6 +96,7 @@ Repo: github.com/dwoodard/snapmark (public). Releases: v0.1.0, v0.1.1 (latest).
 | `VideoViewerController.swift` | In-app video playback, trim, delete |
 | `History.swift`, `RecentBarView.swift` | Recents storage and the thumbnail strip |
 | `Settings.swift`, `SettingsController.swift`, `AspectRatios.swift` | Preferences and UI |
+| `UpdateChecker.swift` | Latest-release check and version comparison |
 | `Output.swift`, `Permissions.swift`, `LaunchAtLogin.swift` | Small helpers |
 
 Other: `scripts/` (build, version, release, DMG), `packaging/dmg/` (window background, regenerate with
@@ -123,9 +124,13 @@ Other: `scripts/` (build, version, release, DMG), `packaging/dmg/` (window backg
 ## State and next steps
 
 - Done and released: capture, picker, editor with crop, recording with audio, viewer, recents, settings, DMG,
-  versioned releases (v0.1.1 latest).
-- Not built / ideas: a license file for the public repo (README exists); Apple notarization; an in-app update check (PhotoCraft
-  checks GitHub's latest release); the editor's Open in button defaulting to Preview when PhotoCraft is missing
-  (planned for v0.1.2); delete not trashing the PNG of a reopened quick capture; window-only capture (the picker
+  versioned releases (v0.1.2 latest), `scripts/install.sh` installer.
+- Built, not yet released (on the feature branch): the update check. Settings > General has **Check for Updates** and a
+  launch-time check (on by default, one HEAD request to `github.com/dwoodard/snapmark/releases/latest`, no personal data).
+  A newer version adds an "Update Available" line at the top of the menu bar menu. The app does not install updates
+  itself: it offers View Release and Copy Install Command (the README one-liner). It only ever counts published stable
+  releases, never drafts or `-rc` builds. Logic is in `UpdateChecker.swift`.
+- Not built / ideas: a license file for the public repo (README exists); Apple notarization; the editor's Open in button defaulting to Preview when PhotoCraft is missing
+  (planned for the next release); delete not trashing the PNG of a reopened quick capture; window-only capture (the picker
   captures the screen area under a window, so overlapping windows show); mic plus computer sound together is untested.
 - Untested: `.github/workflows/release.yml`; the microphone path; behavior on a second Mac.

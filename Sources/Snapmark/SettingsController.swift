@@ -16,6 +16,10 @@ final class SettingsController: NSObject {
     private var actions: [ActionTarget] = []
     private let loginCheckbox = NSButton(checkboxWithTitle: "Launch Snapmark at login", target: nil, action: nil)
     private let folderLabel = NSTextField(labelWithString: "")
+    private let updateStatus = NSTextField(labelWithString: "")
+    private let checkButton = NSButton(title: "Check for Updates", target: nil, action: nil)
+    private let viewReleaseButton = NSButton(title: "View Release", target: nil, action: nil)
+    private let copyInstallButton = NSButton(title: "Copy Install Command", target: nil, action: nil)
     private let editorAppLabel = NSTextField(labelWithString: "")
 
     private final class ActionTarget: NSObject {
@@ -33,6 +37,7 @@ final class SettingsController: NSObject {
 
     func refresh() {
         loginCheckbox.state = LaunchAtLogin.isEnabled ? .on : .off
+        showUpdateState()
         folderLabel.stringValue = Settings.saveFolder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
     }
 
@@ -113,7 +118,69 @@ final class SettingsController: NSObject {
             ("Recent captures", slider(0...30, { Double(Settings.historyLimit) }, { Settings.historyLimit = Int($0) }, "%.0f kept")),
             ("Feedback", check("Play a sound after capture", { Settings.playSound }, { Settings.playSound = $0 })),
             ("Version", NSTextField(labelWithString: SettingsController.versionString)),
+            ("Updates", updateRow()),
+            ("", check("Check for updates when Snapmark starts", { Settings.checkForUpdates }, { Settings.checkForUpdates = $0 })),
         ])
+    }
+
+    private func updateRow() -> NSView {
+        checkButton.target = self
+        checkButton.action = #selector(checkForUpdates)
+        viewReleaseButton.target = self
+        viewReleaseButton.action = #selector(viewRelease)
+        copyInstallButton.target = self
+        copyInstallButton.action = #selector(copyInstallCommand)
+        updateStatus.lineBreakMode = .byTruncatingTail
+        updateStatus.widthAnchor.constraint(equalToConstant: 230).isActive = true
+        let top = NSStackView(views: [checkButton, updateStatus])
+        top.spacing = 8
+        let actions = NSStackView(views: [viewReleaseButton, copyInstallButton])
+        actions.spacing = 8
+        let column = NSStackView(views: [top, actions])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 8
+        showUpdateState()
+        return column
+    }
+
+    /// Reflects what we know without hitting the network.
+    private func showUpdateState() {
+        if let v = UpdateChecker.available {
+            updateStatus.stringValue = "Snapmark \(v) is available"
+            viewReleaseButton.isHidden = false
+            copyInstallButton.isHidden = false
+        } else {
+            viewReleaseButton.isHidden = true
+            copyInstallButton.isHidden = true
+        }
+    }
+
+    @objc private func checkForUpdates() {
+        checkButton.isEnabled = false
+        updateStatus.stringValue = "Checking…"
+        Task { @MainActor in
+            defer { checkButton.isEnabled = true }
+            do {
+                let outcome = try await UpdateChecker.check()
+                if outcome.isNewer {
+                    showUpdateState()
+                } else {
+                    updateStatus.stringValue = "You're up to date (\(UpdateChecker.currentVersion))"
+                    showUpdateState()
+                }
+            } catch {
+                updateStatus.stringValue = "Couldn't check: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    @objc private func viewRelease() { NSWorkspace.shared.open(UpdateChecker.latestURL) }
+
+    @objc private func copyInstallCommand() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(UpdateChecker.installCommand, forType: .string)
+        updateStatus.stringValue = "Copied. Paste it into Terminal."
     }
 
     private func screenshots() -> NSGridView {

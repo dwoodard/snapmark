@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         mainMenu = buildMenu()
         statusItem.menu = mainMenu
         recorder.onUnexpectedStop = { [weak self] in self?.stopRecording() }
+        if Settings.checkForUpdates { Task { _ = try? await UpdateChecker.check() } }   // once per launch, quiet on failure
 
         hotkeys.onHotkey = { [weak self] key in self?.handle(key) }
         if !startHotkeys() {
@@ -34,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startHotkeys() -> Bool { AXIsProcessTrusted() && hotkeys.start() }
 
     private var permissionTimer: Timer?
+    private var updateItem: NSMenuItem!
+    private var updateSeparator: NSMenuItem!
     private var recentHeader: NSMenuItem!
     private var recentBarItem: NSMenuItem!
     private var videoHeader: NSMenuItem!
@@ -44,6 +47,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
         menu.delegate = self
+        updateItem = NSMenuItem(title: "", action: #selector(openSettings), keyEquivalent: "")
+        updateItem.target = self
+        updateItem.isHidden = true
+        updateSeparator = .separator()
+        updateSeparator.isHidden = true
+        menu.addItem(updateItem)
+        menu.addItem(updateSeparator)
         func add(_ title: String, _ key: String, _ action: Selector) {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
             item.keyEquivalentModifierMask = key.isEmpty ? [] : [.command, .shift]
@@ -80,6 +90,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         folderItem.title = "Open \(Settings.saveFolder.lastPathComponent)"
+        let update = UpdateChecker.available
+        updateItem.isHidden = update == nil
+        updateSeparator.isHidden = update == nil
+        if let update { updateItem.title = "Update Available: Snapmark \(update)…" }
         rebuildRecentMenu()
     }
 
