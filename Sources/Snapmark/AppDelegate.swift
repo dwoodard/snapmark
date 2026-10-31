@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Snapmark")
+        statusItem.button?.image = MenuBarIcon.idle
         mainMenu = buildMenu()
         statusItem.menu = mainMenu
         recorder.onUnexpectedStop = { [weak self] in self?.stopRecording() }
@@ -173,12 +173,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let button = statusItem.button else { return }
         if on {
             statusItem.menu = nil
-            button.image = NSImage(systemSymbolName: "stop.circle.fill", accessibilityDescription: "Stop recording")
-            button.contentTintColor = .systemRed
+            button.image = MenuBarIcon.recording
+            button.toolTip = "Recording. Click to stop."
+            button.contentTintColor = nil
             button.target = self
             button.action = #selector(stopRecordingTapped)
         } else {
-            button.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Snapmark")
+            button.image = MenuBarIcon.idle
+            button.toolTip = nil
             button.contentTintColor = nil
             button.action = nil
             statusItem.menu = mainMenu

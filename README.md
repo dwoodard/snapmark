@@ -173,6 +173,8 @@ scripts/release.sh               # same, then create a draft GitHub release
 Sources/Snapmark/     the app (about 2,700 lines of Swift)
 scripts/              build-app.sh, version.sh, release.sh, make-dmg.sh
 packaging/dmg/        the DMG window background
+packaging/icon/       the app icon and the logo it is drawn from
+packaging/menubar/    the menu bar glyphs (idle and recording)
 docs/releasing.md     how releases are cut
 VERSION               the one place the version lives
 CLAUDE.md             notes for working on this project with Claude Code

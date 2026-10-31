@@ -97,9 +97,12 @@ Repo: github.com/dwoodard/snapmark (public). Releases: v0.1.0, v0.1.1 (latest).
 | `History.swift`, `RecentBarView.swift` | Recents storage and the thumbnail strip |
 | `Settings.swift`, `SettingsController.swift`, `AspectRatios.swift` | Preferences and UI |
 | `UpdateChecker.swift` | Latest-release check and version comparison |
+| `MenuBarIcon.swift` | Idle and recording menu bar glyphs (falls back to SF Symbols) |
 | `Output.swift`, `Permissions.swift`, `LaunchAtLogin.swift` | Small helpers |
 
-Other: `scripts/` (build, version, release, DMG), `packaging/dmg/` (window background, regenerate with
+Other: `scripts/` (build, version, release, DMG, install), `packaging/icon/` (app icon: `make-icon.swift`, source logo in
+`source/`, outputs `AppIcon.icns` and `icon-1024.png` are committed), `packaging/menubar/` (`make-menubar.sh` builds the two
+glyphs from the logo with ImageMagick), `packaging/dmg/` (window background, regenerate with
 `make-background.sh`, needs ImageMagick), `docs/releasing.md`, `VERSION`.
 
 ## Lessons learned (do not relearn these)
@@ -124,12 +127,16 @@ Other: `scripts/` (build, version, release, DMG), `packaging/dmg/` (window backg
 ## State and next steps
 
 - Done and released: capture, picker, editor with crop, recording with audio, viewer, recents, settings, DMG,
-  versioned releases (v0.1.2 latest), `scripts/install.sh` installer.
-- Built, not yet released (on the feature branch): the update check. Settings > General has **Check for Updates** and a
+  versioned releases (v0.2.0 latest), `scripts/install.sh` installer.
+- Released in v0.2.0: the update check. Settings > General has **Check for Updates** and a
   launch-time check (on by default, one HEAD request to `github.com/dwoodard/snapmark/releases/latest`, no personal data).
   A newer version adds an "Update Available" line at the top of the menu bar menu. The app does not install updates
   itself: it offers View Release and Copy Install Command (the README one-liner). It only ever counts published stable
   releases, never drafts or `-rc` builds. Logic is in `UpdateChecker.swift`.
+- Built, not yet released (on the feature branch): the real app icon and menu bar glyphs, drawn from Dustin's logo (a red
+  dragon wrapped around a camera lens). App icon: the logo on a dark tile. Menu bar: an idle template glyph (adapts to
+  light and dark) and a red recording glyph with a stop square in the lens, shown while recording (click to stop).
+  Next release would be 0.2.1 (polish, patch).
 - Not built / ideas: a license file for the public repo (README exists); Apple notarization; the editor's Open in button defaulting to Preview when PhotoCraft is missing
   (planned for the next release); delete not trashing the PNG of a reopened quick capture; window-only capture (the picker
   captures the screen area under a window, so overlapping windows show); mic plus computer sound together is untested.

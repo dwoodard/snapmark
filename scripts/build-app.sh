@@ -26,6 +26,8 @@ APP="build/Snapmark.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Snapmark"
+cp packaging/icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp packaging/menubar/MenuBarIdle.png packaging/menubar/MenuBarRecording.png "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -36,6 +38,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key><string>Snapmark</string>
     <key>CFBundleIdentifier</key><string>com.dustinwoodard.snapmark</string>
     <key>CFBundleExecutable</key><string>Snapmark</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>${VERSION}</string>
     <key>CFBundleVersion</key><string>${VERSION}</string>
