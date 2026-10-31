@@ -26,6 +26,11 @@ enum Output {
     }
 
     static func playSound() {
-        if Settings.playSound { NSSound(named: "Tink")?.play() }
+        guard Settings.playSound else { return }
+        // The system camera shutter, played quietly. Falls back to Tink if the file is missing.
+        let shutter = "/System/Library/Components/CoreAudio.component/Contents/SharedSupport/SystemSounds/system/Shutter.aif"
+        let sound = NSSound(contentsOfFile: shutter, byReference: true) ?? NSSound(named: "Tink")
+        sound?.volume = 0.35
+        sound?.play()
     }
 }
