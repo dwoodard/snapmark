@@ -91,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openSettings() { SettingsController.shared.show() }
 
     private func handle(_ key: HotkeyTap.Key) {
+        actionBar.dismiss()
         if recorder.isRecording { stopRecording(); return }
         switch key {
         case .quickFull:
@@ -122,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             Task { @MainActor in
                 do {
-                    try await self.recorder.start(appKitRect: rect)
+                    try await self.recorder.start(appKitRect: rect, systemAudio: Settings.recordSystemAudio, microphone: Settings.recordMicrophone)
                     self.showRecordingState(true)
                 } catch {
                     Permissions.alert("Recording failed: \(error.localizedDescription)\n\nCheck Screen Recording permission.")
@@ -203,6 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if replaced { History.removeVideoEntries(for: file) }   // refresh the thumbnail for the new cut
             Task { _ = await History.addVideo(file) }
         }
+        viewer.onDeleted = { url in History.removeVideoEntries(for: url) }
         viewers.append(viewer)
         viewer.show()
     }

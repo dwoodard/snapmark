@@ -36,6 +36,8 @@ enum Settings {
     static var showCursor: Bool { get { value("showCursor", false) } set { store("showCursor", newValue) } }
     static var filenamePrefix: String { get { value("filenamePrefix", "Screenshot") } set { store("filenamePrefix", newValue) } }
     static var openViewerAfterRecording: Bool { get { value("openViewerAfterRecording", true) } set { store("openViewerAfterRecording", newValue) } }
+    static var recordSystemAudio: Bool { get { value("recordSystemAudio", false) } set { store("recordSystemAudio", newValue) } }
+    static var recordMicrophone: Bool { get { value("recordMicrophone", false) } set { store("recordMicrophone", newValue) } }
     static var videoQuality: VideoQuality {
         get { VideoQuality(rawValue: value("videoQuality", VideoQuality.high.rawValue)) ?? .high }
         set { store("videoQuality", newValue.rawValue) }

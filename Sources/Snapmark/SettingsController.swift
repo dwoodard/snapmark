@@ -5,6 +5,14 @@ final class SettingsController: NSObject {
     var onChange: (() -> Void)?
 
     private var window: NSWindow?
+
+    /// "0.1.0 (a1b2c3d)": the release version and the commit it was built from.
+    static var versionString: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "dev"
+        guard let commit = info?["SnapmarkBuildCommit"] as? String, commit != "unknown" else { return version }
+        return "\(version) (\(commit))"
+    }
     private var actions: [ActionTarget] = []
     private let loginCheckbox = NSButton(checkboxWithTitle: "Launch Snapmark at login", target: nil, action: nil)
     private let folderLabel = NSTextField(labelWithString: "")
@@ -31,13 +39,22 @@ final class SettingsController: NSObject {
     // MARK: Layout
 
     private func build() {
+        let grids: [(String, NSGridView)] = [
+            ("General", general()),
+            ("Screenshots", screenshots()),
+            ("Video", video()),
+            ("Editor", editor()),
+            ("Shortcuts", shortcuts()),
+        ]
         let tabs = NSTabView()
-        tabs.addTabViewItem(tab("General", general()))
-        tabs.addTabViewItem(tab("Capture", capture()))
-        tabs.addTabViewItem(tab("Editor", editor()))
-        tabs.addTabViewItem(tab("Shortcuts", shortcuts()))
+        grids.forEach { tabs.addTabViewItem(tab($0.0, $0.1)) }
 
-        let w = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 520, height: 320),
+        // Size the window to the tallest tab so no row is ever cut off.
+        let tallest = grids.map { $0.1.fittingSize.height }.max() ?? 240
+        let widest = grids.map { $0.1.fittingSize.width }.max() ?? 440
+        let size = NSSize(width: max(widest + 90, 540), height: tallest + 120)
+
+        let w = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                          styleMask: [.titled, .closable], backing: .buffered, defer: false)
         w.title = "Snapmark Settings"
         w.isReleasedWhenClosed = false
@@ -51,6 +68,7 @@ final class SettingsController: NSObject {
             tabs.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
         ])
         w.contentView = content
+        w.setContentSize(size)
         w.center()
         window = w
     }
@@ -94,10 +112,11 @@ final class SettingsController: NSObject {
             ("Save folder", folder),
             ("Recent captures", slider(0...30, { Double(Settings.historyLimit) }, { Settings.historyLimit = Int($0) }, "%.0f kept")),
             ("Feedback", check("Play a sound after capture", { Settings.playSound }, { Settings.playSound = $0 })),
+            ("Version", NSTextField(labelWithString: SettingsController.versionString)),
         ])
     }
 
-    private func capture() -> NSGridView {
+    private func screenshots() -> NSGridView {
         let prefix = NSTextField(string: Settings.filenamePrefix)
         prefix.widthAnchor.constraint(equalToConstant: 160).isActive = true
         prefix.placeholderString = "Screenshot"
@@ -115,10 +134,17 @@ final class SettingsController: NSObject {
             ("Region ratio", popup(AspectRatios.all.map(\.title), selected: Settings.aspectIndex) { Settings.aspectIndex = $0 }),
             ("Format", format),
             ("File name", prefix),
-            ("Video frame rate", popup(["30 fps", "60 fps"], selected: Settings.videoFPS == 60 ? 1 : 0) { Settings.videoFPS = $0 == 1 ? 60 : 30 }),
-            ("After recording", check("Open the video to review it", { Settings.openViewerAfterRecording }, { Settings.openViewerAfterRecording = $0 })),
-            ("Video quality", popup(VideoQuality.allCases.map(\.title), selected: Settings.videoQuality.rawValue) { Settings.videoQuality = VideoQuality(rawValue: $0) ?? .high }),
             ("Pointer", check("Include the mouse cursor", { Settings.showCursor }, { Settings.showCursor = $0 })),
+        ])
+    }
+
+    private func video() -> NSGridView {
+        grid([
+            ("Audio", check("Computer sound", { Settings.recordSystemAudio }, { Settings.recordSystemAudio = $0 })),
+            ("", check("Microphone", { Settings.recordMicrophone }, { Settings.recordMicrophone = $0 })),
+            ("Quality", popup(VideoQuality.allCases.map(\.title), selected: Settings.videoQuality.rawValue) { Settings.videoQuality = VideoQuality(rawValue: $0) ?? .high }),
+            ("Frame rate", popup(["30 fps", "60 fps"], selected: Settings.videoFPS == 60 ? 1 : 0) { Settings.videoFPS = $0 == 1 ? 60 : 30 }),
+            ("After recording", check("Open the video to review it", { Settings.openViewerAfterRecording }, { Settings.openViewerAfterRecording = $0 })),
         ])
     }
 

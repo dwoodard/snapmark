@@ -36,7 +36,9 @@ enum Capture {
         }
 
         let clip = display.frame.intersection(cg)
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        // Snapmark's own overlays, bars and outlines must never appear in a capture.
+        let ownApps = content.applications.filter { $0.bundleIdentifier == Bundle.main.bundleIdentifier }
+        let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
         let scale = CGFloat(filter.pointPixelScale)
 
         let config = SCStreamConfiguration()

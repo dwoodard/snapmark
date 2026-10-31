@@ -11,6 +11,7 @@ final class EditorController: NSObject, NSWindowDelegate {
     var onClose: ((EditorController) -> Void)?
     let historyID: String?
     private let barHeight: CGFloat = 44
+    private var lastSavedURL: URL?
     private var canvasWidth: NSLayoutConstraint!
     private var canvasHeight: NSLayoutConstraint!
 
@@ -51,7 +52,6 @@ final class EditorController: NSObject, NSWindowDelegate {
         window.title = "Snapmark"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.level = .floating
 
         let content = NSView()
         window.contentView = content
@@ -94,19 +94,36 @@ final class EditorController: NSObject, NSWindowDelegate {
         window.makeFirstResponder(canvas)
     }
 
-    enum Command { case copy, save, undo, close, openExternal }
+    enum Command { case copy, save, undo, close, openExternal, openFolder, delete }
 
     private func run(_ cmd: Command) {
         switch cmd {
         case .undo: canvas.undo()
         case .openExternal: openInExternalEditor()
+        case .delete:
+            // Discard: drop it from Recent Screenshots, trash anything saved from this editor, close.
+            if let id = historyID, let entry = History.entries().first(where: { $0.id == id }) { History.remove(entry) }
+            if let url = lastSavedURL, FileManager.default.fileExists(atPath: url.path) {
+                try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            }
+            window.close()
+        case .openFolder:
+            // Reveal the file saved from this editor, else just open the save folder.
+            if let url = lastSavedURL, FileManager.default.fileExists(atPath: url.path) {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } else {
+                NSWorkspace.shared.open(Settings.saveFolder)
+            }
         case .close: window.close()
         case .save:
-            if let img = renderer.render(canvas.items), (try? Output.save(img)) != nil { Output.playSound() }
+            if let img = renderer.render(canvas.items), let url = try? Output.save(img) {
+                lastSavedURL = url
+                Output.playSound()
+            }
         case .copy:
             if let img = renderer.render(canvas.items) {
                 Output.copyToClipboard(img)
-                if Settings.editorSaveOnCopy { _ = try? Output.save(img) }
+                if Settings.editorSaveOnCopy { lastSavedURL = try? Output.save(img) }
             }
             Output.playSound()
             if Settings.editorCloseAfterCopy { window.close() }
@@ -124,7 +141,10 @@ final class EditorController: NSObject, NSWindowDelegate {
             Permissions.alert("Could not save the image to open it.")
             return
         }
-        NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: NSWorkspace.OpenConfiguration())
+        lastSavedURL = file
+        let open = NSWorkspace.OpenConfiguration()
+        open.activates = true   // bring the editor app to the front
+        NSWorkspace.shared.open([file], withApplicationAt: appURL, configuration: open)
     }
 
     private func buildBar() -> NSView {
@@ -146,13 +166,22 @@ final class EditorController: NSObject, NSWindowDelegate {
 
         configure(undoButton, symbol: "arrow.uturn.backward", title: "Undo", action: #selector(undoTapped))
         let external = NSButton(); configure(external, symbol: "arrow.up.forward.app", title: "Open in \(Settings.externalEditorName)", action: #selector(externalTapped))
+        let folder = NSButton()
+        configure(folder, symbol: "folder", title: "", action: #selector(folderTapped))
+        folder.imagePosition = .imageOnly
+        folder.toolTip = "Open the folder (⌘O)"
+        let trash = NSButton()
+        configure(trash, symbol: "trash", title: "", action: #selector(deleteTapped))
+        trash.imagePosition = .imageOnly
+        trash.contentTintColor = .systemRed
+        trash.toolTip = "Delete this capture (⌘⌫)"
         let save = NSButton(); configure(save, symbol: "square.and.arrow.down", title: "Save", action: #selector(saveTapped))
         let copy = NSButton(); configure(copy, symbol: "doc.on.doc", title: "Copy", action: #selector(copyTapped))
         copy.keyEquivalent = "\r"
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let stack = NSStackView(views: [toolPicker, colorWell, undoButton, spacer, external, save, copy])
+        let stack = NSStackView(views: [toolPicker, colorWell, undoButton, spacer, trash, folder, external, save, copy])
         stack.orientation = .horizontal
         stack.spacing = 10
         stack.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
@@ -180,6 +209,8 @@ final class EditorController: NSObject, NSWindowDelegate {
     @objc private func colorChanged() { canvas.setColor(colorWell.color, for: canvas.tool) }
     @objc private func undoTapped() { run(.undo) }
     @objc private func externalTapped() { run(.openExternal) }
+    @objc private func deleteTapped() { run(.delete) }
+    @objc private func folderTapped() { run(.openFolder) }
     @objc private func saveTapped() { run(.save) }
     @objc private func copyTapped() { run(.copy) }
 

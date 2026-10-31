@@ -10,6 +10,8 @@ final class VideoViewerController: NSObject, NSWindowDelegate {
     var onClose: ((VideoViewerController) -> Void)?
     /// Called after a trim is written. `replaced` is true when the original file was overwritten.
     var onSaved: ((URL, Bool) -> Void)?
+    /// Called after the video was moved to the Trash.
+    var onDeleted: ((URL) -> Void)?
 
     init(url: URL) {
         self.url = url
@@ -71,10 +73,28 @@ final class VideoViewerController: NSObject, NSWindowDelegate {
         let copy = NSButton(); button(copy, "doc.on.doc", "Copy File", #selector(copyFile))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let stack = NSStackView(views: [trimButton, spacer, finder, copy])
+        let trash = NSButton(); button(trash, "trash", "Delete", #selector(deleteVideo))
+        trash.contentTintColor = .systemRed
+        trash.keyEquivalent = "\u{7f}"
+        trash.keyEquivalentModifierMask = .command
+        trash.toolTip = "Move this video to the Trash (⌘⌫)"
+        let stack = NSStackView(views: [trimButton, spacer, trash, finder, copy])
         stack.spacing = 10
         stack.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
         return stack
+    }
+
+    @objc private func deleteVideo() {
+        playerView.player?.pause()
+        playerView.player = nil
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        } catch {
+            Permissions.alert("Could not move the video to the Trash: \(error.localizedDescription)")
+            return
+        }
+        onDeleted?(url)
+        window.close()
     }
 
     @objc private func showInFinder() {

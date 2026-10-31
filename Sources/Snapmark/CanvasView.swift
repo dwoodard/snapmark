@@ -275,6 +275,8 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         case "s": onCommand?(.save)
         case "w": onCommand?(.close)
         case "e": onCommand?(.openExternal)
+        case "o": onCommand?(.openFolder)
+        case "\u{7f}": onCommand?(.delete)
         default: return super.performKeyEquivalent(with: event)
         }
         return true

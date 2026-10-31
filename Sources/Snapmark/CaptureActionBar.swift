@@ -12,11 +12,13 @@ final class CaptureActionBar {
     }
 
     func show(near rect: CGRect, onEdit: @escaping () -> Void, onRecord: @escaping () -> Void) {
+        dismiss()   // never leave a previous bar or outline behind
         self.onEdit = onEdit
         self.onRecord = onRecord
 
         // Thin outline so the selection stays visible while choosing.
-        let o = NSWindow(contentRect: rect, styleMask: .borderless, backing: .buffered, defer: false)
+        // Drawn just outside the selection so it can never land inside the captured area.
+        let o = NSWindow(contentRect: rect.insetBy(dx: -2, dy: -2), styleMask: .borderless, backing: .buffered, defer: false)
         o.backgroundColor = .clear
         o.isOpaque = false
         o.hasShadow = false
@@ -25,7 +27,7 @@ final class CaptureActionBar {
         o.contentView = NSView()
         o.contentView?.wantsLayer = true
         o.contentView?.layer?.borderWidth = 1
-        o.contentView?.layer?.borderColor = NSColor.white.cgColor
+        o.contentView?.layer?.borderColor = NSColor.white.withAlphaComponent(0.6).cgColor
         o.orderFront(nil)
         outline = o
 
@@ -33,8 +35,11 @@ final class CaptureActionBar {
         let record = button("Record Video", "record.circle", #selector(recordTapped), key: "r")
         record.contentTintColor = .systemRed
         let cancel = button("", "xmark", #selector(cancelTapped), key: "\u{1b}")
+        // Quick audio switches for recording. They remember their last state.
+        let system = toggle("speaker.wave.2", "Computer sound", on: Settings.recordSystemAudio, #selector(systemToggled(_:)))
+        let mic = toggle("mic", "Microphone", on: Settings.recordMicrophone, #selector(micToggled(_:)))
 
-        let stack = NSStackView(views: [edit, record, cancel])
+        let stack = NSStackView(views: [edit, record, system, mic, cancel])
         stack.spacing = 8
         stack.edgeInsets = NSEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
         let size = stack.fittingSize
@@ -79,6 +84,20 @@ final class CaptureActionBar {
         b.keyEquivalent = key
         return b
     }
+
+    private func toggle(_ symbol: String, _ tip: String, on: Bool, _ action: Selector) -> NSButton {
+        let b = NSButton(title: "", target: self, action: action)
+        b.setButtonType(.pushOnPushOff)
+        b.bezelStyle = .rounded
+        b.image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
+        b.imagePosition = .imageOnly
+        b.state = on ? .on : .off
+        b.toolTip = tip + " when recording"
+        return b
+    }
+
+    @objc private func systemToggled(_ sender: NSButton) { Settings.recordSystemAudio = sender.state == .on }
+    @objc private func micToggled(_ sender: NSButton) { Settings.recordMicrophone = sender.state == .on }
 
     @objc private func editTapped() { let f = onEdit; dismiss(); f?() }
     @objc private func recordTapped() { let f = onRecord; dismiss(); f?() }

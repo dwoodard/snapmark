@@ -1,0 +1,57 @@
+name: Release
+
+# Every push to the `release` branch builds Snapmark and creates or updates a DRAFT release
+# "Snapmark v<version>" (version from the VERSION file). Publish the draft by hand.
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version override for a test run, e.g. 0.2.0-rc.1 (empty: VERSION file)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Optional. Without it the app gets an ad-hoc signature and users re-grant permissions after each update.
+      - name: Import signing certificate
+        env:
+          SIGNING_CERTIFICATE: ${{ secrets.SIGNING_CERTIFICATE }}
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          if [[ -z "$SIGNING_CERTIFICATE" ]]; then
+            echo "::warning::SIGNING_CERTIFICATE is not set. This release will be ad-hoc signed."
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/snapmark.keychain-db"
+          PW="${KEYCHAIN_PASSWORD:-$(uuidgen)}"
+          echo "$SIGNING_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$PW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$PW" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$SIGNING_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$PW" "$KC"
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+
+      - name: Build and draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SNAPMARK_VERSION: ${{ inputs.version }}
+        run: ./scripts/release.sh
