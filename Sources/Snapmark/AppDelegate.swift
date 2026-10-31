@@ -5,27 +5,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let hotkeys = HotkeyTap()
     private var selector: RegionSelector?
     private var editors: [EditorController] = []
+    private var viewers: [VideoViewerController] = []
+    private let actionBar = CaptureActionBar()
+    private let recorder = Recorder()
+    private var mainMenu: NSMenu!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Snapmark")
-        statusItem.menu = buildMenu()
+        mainMenu = buildMenu()
+        statusItem.menu = mainMenu
+        recorder.onUnexpectedStop = { [weak self] in self?.stopRecording() }
 
-        guard Permissions.ensureHotkeyAccess() else {
-            Permissions.alert("Snapmark needs Accessibility and Input Monitoring. Grant them to this app or its launching terminal in System Settings > Privacy & Security, then relaunch.")
-            NSApp.terminate(nil)
-            return
-        }
         hotkeys.onHotkey = { [weak self] key in self?.handle(key) }
-        guard hotkeys.start() else {
-            Permissions.alert("Could not start the hotkey tap. Grant Input Monitoring, then relaunch.")
-            NSApp.terminate(nil)
-            return
+        if !startHotkeys() {
+            // Stay in the menu bar and keep trying until the user grants permission.
+            statusItem.button?.appearsDisabled = true
+            _ = Permissions.ensureHotkeyAccess()
+            permissionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] t in
+                guard let self, self.startHotkeys() else { return }
+                t.invalidate()
+                self.permissionTimer = nil
+                self.statusItem.button?.appearsDisabled = false
+            }
         }
     }
 
+    private func startHotkeys() -> Bool { AXIsProcessTrusted() && hotkeys.start() }
+
+    private var permissionTimer: Timer?
+    private var recentHeader: NSMenuItem!
+    private var recentBarItem: NSMenuItem!
+    private var videoHeader: NSMenuItem!
+    private var videoBarItem: NSMenuItem!
+    private var recentItem: NSMenuItem!
     private var folderItem: NSMenuItem!
-    private var loginItem: NSMenuItem!
 
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
@@ -37,17 +51,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(item)
         }
         add("Capture Region", "4", #selector(menuQuickRegion))
-        add("Capture Region and Edit", "5", #selector(menuEditRegion))
+        add("Capture Region: Edit or Record", "5", #selector(menuEditRegion))
         add("Capture Full Screen", "3", #selector(menuQuickFull))
+        recentHeader = NSMenuItem.sectionHeader(title: "Recent Screenshots")
+        recentBarItem = NSMenuItem()
+        videoHeader = NSMenuItem.sectionHeader(title: "Recent Videos")
+        videoBarItem = NSMenuItem()
+        menu.addItem(.separator())
+        menu.addItem(recentHeader)
+        menu.addItem(recentBarItem)
+        menu.addItem(videoHeader)
+        menu.addItem(videoBarItem)
+        recentItem = NSMenuItem(title: "All Recent Captures", action: nil, keyEquivalent: "")
+        recentItem.submenu = NSMenu()
+        menu.addItem(recentItem)
         menu.addItem(.separator())
         folderItem = NSMenuItem(title: "", action: #selector(openFolder), keyEquivalent: "")
         folderItem.target = self
         menu.addItem(folderItem)
-        add("Choose Save Folder…", "", #selector(chooseFolder))
-        menu.addItem(.separator())
-        loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
-        loginItem.target = self
-        menu.addItem(loginItem)
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -59,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         folderItem.title = "Open \(Settings.saveFolder.lastPathComponent)"
-        loginItem.state = LaunchAtLogin.isEnabled ? .on : .off
+        rebuildRecentMenu()
     }
 
     @objc private func menuQuickRegion() { handle(.quickRegion) }
@@ -67,15 +88,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func menuQuickFull() { handle(.quickFull) }
     @objc private func openFolder() { NSWorkspace.shared.open(Settings.saveFolder) }
 
-    @objc private func chooseFolder() { Settings.chooseFolder() }
-
-    @objc private func toggleLaunchAtLogin() {
-        SettingsController.shared.setLaunchAtLogin(!LaunchAtLogin.isEnabled)
-    }
-
     @objc private func openSettings() { SettingsController.shared.show() }
 
     private func handle(_ key: HotkeyTap.Key) {
+        if recorder.isRecording { stopRecording(); return }
         switch key {
         case .quickFull:
             let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main!
@@ -84,11 +100,162 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard selector == nil else { return }
             let edit = key == .editRegion
             selector = RegionSelector { [weak self] rect in
-                self?.selector = nil
-                if let rect { self?.capture(rect: rect, edit: edit) }
+                guard let self else { return }
+                self.selector = nil
+                guard let rect else { return }
+                if edit {
+                    self.actionBar.show(near: rect,
+                                        onEdit: { [weak self] in self?.capture(rect: rect, edit: true) },
+                                        onRecord: { [weak self] in self?.startRecording(rect: rect) })
+                } else {
+                    self.capture(rect: rect, edit: false)
+                }
             }
             selector?.begin()
         }
+    }
+
+    // MARK: Recording
+
+    private func startRecording(rect: CGRect) {
+        // Let the selection outline and bar disappear before the first frame.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            Task { @MainActor in
+                do {
+                    try await self.recorder.start(appKitRect: rect)
+                    self.showRecordingState(true)
+                } catch {
+                    Permissions.alert("Recording failed: \(error.localizedDescription)\n\nCheck Screen Recording permission.")
+                }
+            }
+        }
+    }
+
+    private func stopRecording() {
+        guard recorder.isRecording else { return }
+        Task { @MainActor in
+            let url = await self.recorder.stop()
+            self.showRecordingState(false)
+            let size = url.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int } ?? 0
+            guard let url, size > 0 else {
+                Permissions.alert("The recording did not produce a video file. Check Screen Recording permission and try again.")
+                return
+            }
+            _ = await History.addVideo(url)
+            if Settings.copyToClipboard {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.writeObjects([url as NSURL])
+            }
+            Output.playSound()
+            if Settings.openViewerAfterRecording { self.openVideo(url) }
+        }
+    }
+
+    @objc private func stopRecordingTapped() { stopRecording() }
+
+    /// While recording, the menu bar icon is a red stop button. Clicking it stops.
+    private func showRecordingState(_ on: Bool) {
+        guard let button = statusItem.button else { return }
+        if on {
+            statusItem.menu = nil
+            button.image = NSImage(systemSymbolName: "stop.circle.fill", accessibilityDescription: "Stop recording")
+            button.contentTintColor = .systemRed
+            button.target = self
+            button.action = #selector(stopRecordingTapped)
+        } else {
+            button.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Snapmark")
+            button.contentTintColor = nil
+            button.action = nil
+            statusItem.menu = mainMenu
+        }
+    }
+
+    private func openEditor(_ result: Capture.Result, historyID: String?, annotations: [Annotation] = []) {
+        let editor = EditorController(capture: result, historyID: historyID, annotations: annotations)
+        editor.onClose = { [weak self] e in self?.editors.removeAll { $0 === e } }
+        editors.append(editor)
+        editor.show()
+    }
+
+    @objc private func openRecentItem(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { openRecent(id: id) }
+    }
+
+    private func openRecent(id: String) {
+        if let entry = History.entries().first(where: { $0.id == id }), entry.kind == .video {
+            if let url = entry.videoURL, FileManager.default.fileExists(atPath: url.path) {
+                openVideo(url)
+            } else {
+                History.remove(entry)   // the file was moved or deleted
+            }
+            return
+        }
+        if let open = editors.first(where: { $0.historyID == id }) { open.bringToFront(); return }
+        guard let entry = History.entries().first(where: { $0.id == id }), let loaded = History.load(entry) else { return }
+        openEditor(loaded.capture, historyID: id, annotations: loaded.annotations)
+    }
+
+    private func openVideo(_ url: URL) {
+        if let open = viewers.first(where: { $0.url == url }) { open.bringToFront(); return }
+        let viewer = VideoViewerController(url: url)
+        viewer.onClose = { [weak self] v in self?.viewers.removeAll { $0 === v } }
+        viewer.onSaved = { file, replaced in
+            if replaced { History.removeVideoEntries(for: file) }   // refresh the thumbnail for the new cut
+            Task { _ = await History.addVideo(file) }
+        }
+        viewers.append(viewer)
+        viewer.show()
+    }
+
+    @objc private func clearRecent() { History.clear() }
+
+    private func menuItem(for e: HistoryEntry, formatter f: DateFormatter) -> NSMenuItem {
+        let item = NSMenuItem(title: f.string(from: e.date), action: #selector(openRecentItem(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = e.id
+        if let t = e.thumbnail {
+            let h: CGFloat = 36
+            t.size = NSSize(width: t.size.width * h / max(t.size.height, 1), height: h)
+            item.image = t
+        }
+        return item
+    }
+
+    private func rebuildRecentMenu() {
+        let sub = NSMenu()
+        let all = History.entries()
+        let entries = all.filter { $0.kind == .image }
+        let videos = all.filter { $0.kind == .video }
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        f.doesRelativeDateFormatting = true
+        func addSection(_ title: String, _ list: [HistoryEntry]) {
+            guard !list.isEmpty else { return }
+            sub.addItem(NSMenuItem.sectionHeader(title: title))
+            for e in list { sub.addItem(menuItem(for: e, formatter: f)) }
+        }
+        addSection("Screenshots", entries)
+        addSection("Videos", videos)
+        if all.isEmpty {
+            let none = NSMenuItem(title: "No recent captures", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            sub.addItem(none)
+        } else {
+            sub.addItem(.separator())
+            let clear = NSMenuItem(title: "Clear Recent", action: #selector(clearRecent), keyEquivalent: "")
+            clear.target = self
+            sub.addItem(clear)
+        }
+        recentItem.submenu = sub
+
+        recentHeader.isHidden = entries.isEmpty
+        recentBarItem.isHidden = entries.isEmpty
+        recentBarItem.view = entries.isEmpty ? nil : RecentBarView(entries: entries) { [weak self] id in self?.openRecent(id: id) }
+
+        videoHeader.isHidden = videos.isEmpty
+        videoBarItem.isHidden = videos.isEmpty
+        videoBarItem.view = videos.isEmpty ? nil : RecentBarView(entries: videos) { [weak self] id in self?.openRecent(id: id) }
     }
 
     private func capture(rect: CGRect, edit: Bool) {
@@ -97,11 +264,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Task { @MainActor in
                 do {
                     let result = try await Capture.image(appKitRect: rect)
+                    let historyID = History.add(result)
                     if edit {
-                        let editor = EditorController(capture: result)
-                        editor.onClose = { [weak self] e in self?.editors.removeAll { $0 === e } }
-                        self.editors.append(editor)
-                        editor.show()
+                        self.openEditor(result, historyID: historyID)
                     } else {
                         if Settings.copyToClipboard { Output.copyToClipboard(result.image) }
                         if Settings.saveToFile { try Output.save(result.image) }

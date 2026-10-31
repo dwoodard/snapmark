@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 enum ImageFormat: String, CaseIterable {
     case png, jpeg
@@ -25,7 +26,8 @@ enum Settings {
         set { store("saveFolderPath", newValue.path) }
     }
 
-    static var playSound: Bool { get { value("playSound", true) } set { store("playSound", newValue) } }
+    static var historyLimit: Int { get { value("historyLimit", 10) } set { store("historyLimit", newValue) } }
+    static var playSound: Bool { get { value("playSound", false) } set { store("playSound", newValue) } }
 
     // MARK: Capture
 
@@ -33,12 +35,39 @@ enum Settings {
     static var saveToFile: Bool { get { value("saveToFile", true) } set { store("saveToFile", newValue) } }
     static var showCursor: Bool { get { value("showCursor", false) } set { store("showCursor", newValue) } }
     static var filenamePrefix: String { get { value("filenamePrefix", "Screenshot") } set { store("filenamePrefix", newValue) } }
+    static var openViewerAfterRecording: Bool { get { value("openViewerAfterRecording", true) } set { store("openViewerAfterRecording", newValue) } }
+    static var videoQuality: VideoQuality {
+        get { VideoQuality(rawValue: value("videoQuality", VideoQuality.high.rawValue)) ?? .high }
+        set { store("videoQuality", newValue.rawValue) }
+    }
+    static var videoFPS: Int { get { value("videoFPS", 30) } set { store("videoFPS", newValue) } }
+    static var aspectIndex: Int { get { value("aspectIndex", 0) } set { store("aspectIndex", newValue) } }
     static var imageFormat: ImageFormat {
         get { ImageFormat(rawValue: value("imageFormat", "png")) ?? .png }
         set { store("imageFormat", newValue.rawValue) }
     }
 
     // MARK: Editor
+
+    /// App used by the editor's "Open in…" button.
+    static var externalEditorPath: String {
+        get { value("externalEditorPath", "/Applications/PhotoCraft.app") }
+        set { store("externalEditorPath", newValue) }
+    }
+    static var externalEditorName: String {
+        FileManager.default.displayName(atPath: externalEditorPath).replacingOccurrences(of: ".app", with: "")
+    }
+
+    private static func chooseApp() -> String? {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = "Choose"
+        NSApp.activate(ignoringOtherApps: true)
+        return panel.runModal() == .OK ? panel.url?.path : nil
+    }
+
+    static func chooseExternalEditor() { if let p = chooseApp() { externalEditorPath = p } }
 
     static var defaultTool: Int { get { value("defaultTool", Tool.arrow.rawValue) } set { store("defaultTool", newValue) } }
     static var lineWidth: Double { get { value("lineWidth", 3.0) } set { store("lineWidth", newValue) } }

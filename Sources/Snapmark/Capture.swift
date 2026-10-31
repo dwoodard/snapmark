@@ -13,9 +13,16 @@ enum Capture {
         let pixelScale: CGFloat
     }
 
+    /// A display, filter and stream configuration for a screen rect, shared by screenshots and video.
+    struct Target {
+        let filter: SCContentFilter
+        let config: SCStreamConfiguration
+        let pixelScale: CGFloat
+    }
+
     /// `appKitRect` is in global AppKit coordinates (origin bottom-left of the primary display).
     /// A selection spanning displays is clipped to the display it overlaps most.
-    static func image(appKitRect r: CGRect) async throws -> Result {
+    static func prepare(appKitRect r: CGRect) async throws -> Target {
         let primaryHeight = NSScreen.screens[0].frame.height
         let cg = CGRect(x: r.minX, y: primaryHeight - r.maxY, width: r.width, height: r.height)
 
@@ -38,8 +45,13 @@ enum Capture {
         config.width = Int((clip.width * scale).rounded())
         config.height = Int((clip.height * scale).rounded())
         config.showsCursor = Settings.showCursor
+        config.captureResolution = .best
+        return Target(filter: filter, config: config, pixelScale: scale)
+    }
 
-        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-        return Result(image: image, pixelScale: scale)
+    static func image(appKitRect r: CGRect) async throws -> Result {
+        let t = try await prepare(appKitRect: r)
+        let image = try await SCScreenshotManager.captureImage(contentFilter: t.filter, configuration: t.config)
+        return Result(image: image, pixelScale: t.pixelScale)
     }
 }

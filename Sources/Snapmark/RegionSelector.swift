@@ -69,6 +69,24 @@ private final class SelectionView: NSView {
         let path = NSBezierPath(rect: r)
         path.lineWidth = 1
         path.stroke()
+        drawSizeLabel(for: r)
+    }
+
+    private func drawSizeLabel(for r: NSRect) {
+        let ratio = AspectRatios.label(w: r.width, h: r.height)
+        let text = "\(Int(r.width.rounded())) × \(Int(r.height.rounded()))" + (ratio.isEmpty ? "" : "  ·  \(ratio)")
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium),
+            .foregroundColor: NSColor.white,
+        ]
+        let size = (text as NSString).size(withAttributes: attrs)
+        let pill = NSSize(width: size.width + 12, height: size.height + 6)
+        // Above the selection when there is room, otherwise inside its top edge.
+        let y = r.maxY + 4 + pill.height <= bounds.maxY ? r.maxY + 4 : r.maxY - pill.height - 4
+        let box = NSRect(x: min(max(r.minX, bounds.minX + 4), bounds.maxX - pill.width - 4), y: y, width: pill.width, height: pill.height)
+        NSColor.black.withAlphaComponent(0.7).setFill()
+        NSBezierPath(roundedRect: box, xRadius: 5, yRadius: 5).fill()
+        (text as NSString).draw(at: NSPoint(x: box.minX + 6, y: box.minY + 3), withAttributes: attrs)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -86,10 +104,27 @@ private final class SelectionView: NSView {
             start = NSPoint(x: s.x + dx, y: s.y + dy)
             current = NSPoint(x: c.x + dx, y: c.y + dy)
         } else {
-            current = p
+            current = constrain(p)
         }
         lastMouse = p
         needsDisplay = true
+    }
+
+    /// Applies the Region ratio setting: fixed ratios always, Smart only when close to a common one.
+    private func constrain(_ p: NSPoint) -> NSPoint {
+        guard let s = start else { return p }
+        let dx = p.x - s.x, dy = p.y - s.y
+        let choice = AspectRatios.current
+        let ratio = choice.ratio ?? (choice.smart ? AspectRatios.snapRatio(w: abs(dx), h: abs(dy)) : nil)
+        guard let r = ratio else { return p }
+
+        let sx: CGFloat = dx < 0 ? -1 : 1, sy: CGFloat = dy < 0 ? -1 : 1
+        var w = max(abs(dx), abs(dy) * r)
+        // Keep the rect on this screen.
+        let maxW = sx > 0 ? bounds.maxX - s.x : s.x - bounds.minX
+        let maxH = sy > 0 ? bounds.maxY - s.y : s.y - bounds.minY
+        w = min(w, maxW, maxH * r)
+        return NSPoint(x: s.x + sx * w, y: s.y + sy * (w / r))
     }
 
     override func mouseUp(with event: NSEvent) {

@@ -8,6 +8,7 @@ final class SettingsController: NSObject {
     private var actions: [ActionTarget] = []
     private let loginCheckbox = NSButton(checkboxWithTitle: "Launch Snapmark at login", target: nil, action: nil)
     private let folderLabel = NSTextField(labelWithString: "")
+    private let editorAppLabel = NSTextField(labelWithString: "")
 
     private final class ActionTarget: NSObject {
         let fn: (NSControl) -> Void
@@ -91,6 +92,7 @@ final class SettingsController: NSObject {
         return grid([
             ("Startup", loginCheckbox),
             ("Save folder", folder),
+            ("Recent captures", slider(0...30, { Double(Settings.historyLimit) }, { Settings.historyLimit = Int($0) }, "%.0f kept")),
             ("Feedback", check("Play a sound after capture", { Settings.playSound }, { Settings.playSound = $0 })),
         ])
     }
@@ -110,15 +112,23 @@ final class SettingsController: NSObject {
         return grid([
             ("Quick capture", check("Copy to clipboard", { Settings.copyToClipboard }, { Settings.copyToClipboard = $0 })),
             ("", check("Save to the save folder", { Settings.saveToFile }, { Settings.saveToFile = $0 })),
+            ("Region ratio", popup(AspectRatios.all.map(\.title), selected: Settings.aspectIndex) { Settings.aspectIndex = $0 }),
             ("Format", format),
             ("File name", prefix),
+            ("Video frame rate", popup(["30 fps", "60 fps"], selected: Settings.videoFPS == 60 ? 1 : 0) { Settings.videoFPS = $0 == 1 ? 60 : 30 }),
+            ("After recording", check("Open the video to review it", { Settings.openViewerAfterRecording }, { Settings.openViewerAfterRecording = $0 })),
+            ("Video quality", popup(VideoQuality.allCases.map(\.title), selected: Settings.videoQuality.rawValue) { Settings.videoQuality = VideoQuality(rawValue: $0) ?? .high }),
             ("Pointer", check("Include the mouse cursor", { Settings.showCursor }, { Settings.showCursor = $0 })),
         ])
     }
 
     private func editor() -> NSGridView {
         let tool = popup(Tool.allCases.map { $0.label }, selected: Settings.defaultTool) { Settings.defaultTool = $0 }
+        editorAppLabel.stringValue = Settings.externalEditorName
+        let editorApp = NSStackView(views: [editorAppLabel, NSButton(title: "Choose…", target: self, action: #selector(chooseEditorApp))])
+        editorApp.spacing = 8
         return grid([
+            ("Open in", editorApp),
             ("Default tool", tool),
             ("Line width", slider(1...10, { Settings.lineWidth }, { Settings.lineWidth = $0 }, "%.0f pt")),
             ("Text size", slider(10...48, { Settings.textSize }, { Settings.textSize = $0 }, "%.0f pt")),
@@ -132,12 +142,12 @@ final class SettingsController: NSObject {
         func row(_ keys: String, _ title: String, _ k: HotkeyTap.Key) -> (String, NSView) {
             (keys, check(title, { Settings.hotkeyEnabled(k) }, { Settings.setHotkey(k, enabled: $0) }))
         }
-        let note = NSTextField(wrappingLabelWithString: "A turned-off shortcut goes back to macOS.\nHold Space while dragging to move the selection.")
+        let note = NSTextField(wrappingLabelWithString: "A turned-off shortcut goes back to macOS.\nHold Space while dragging to move the selection.\nWhile recording, any capture shortcut or the red menu bar icon stops it.")
         note.font = .systemFont(ofSize: 11)
         note.textColor = .secondaryLabelColor
         return grid([
             row("⌘⇧4", "Capture region (copy + save)", .quickRegion),
-            row("⌘⇧5", "Capture region and edit", .editRegion),
+            row("⌘⇧5", "Capture region: edit or record video", .editRegion),
             row("⌘⇧3", "Capture full screen", .quickFull),
             ("", note),
         ])
@@ -187,6 +197,11 @@ final class SettingsController: NSObject {
     @objc private func toggleLogin() {
         setLaunchAtLogin(loginCheckbox.state == .on)
         refresh()
+    }
+
+    @objc private func chooseEditorApp() {
+        Settings.chooseExternalEditor()
+        editorAppLabel.stringValue = Settings.externalEditorName
     }
 
     @objc private func chooseFolder() {

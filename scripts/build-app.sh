@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds Snapmark.app. Pass --install to copy it to ~/Applications.
+# Builds Snapmark.app. Pass --install to copy it to /Applications.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -31,12 +31,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 # Ad-hoc signature unless SIGN_ID names a real identity (a stable identity keeps privacy permissions across rebuilds).
+if [[ -z "${SIGN_ID:-}" ]] && security find-identity -p codesigning | grep -q "Snapmark Local Signing"; then SIGN_ID="Snapmark Local Signing"; fi
 codesign --force --deep --sign "${SIGN_ID:--}" "$APP"
 echo "Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
-    mkdir -p ~/Applications
-    rm -rf ~/Applications/Snapmark.app
-    cp -R "$APP" ~/Applications/Snapmark.app
-    echo "Installed ~/Applications/Snapmark.app"
+    mkdir -p /Applications
+    rm -rf /Applications/Snapmark.app
+    cp -R "$APP" /Applications/Snapmark.app
+    echo "Installed /Applications/Snapmark.app"
 fi

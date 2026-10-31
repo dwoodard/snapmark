@@ -2,7 +2,7 @@ import AppKit
 import CoreImage
 
 enum Tool: Int, CaseIterable {
-    case arrow, rect, highlight, text, blur
+    case arrow, rect, highlight, text, blur, crop
 
     var symbol: String {
         switch self {
@@ -11,6 +11,7 @@ enum Tool: Int, CaseIterable {
         case .highlight: "highlighter"
         case .text: "textformat"
         case .blur: "eye.slash"
+        case .crop: "crop"
         }
     }
     var label: String {
@@ -20,6 +21,7 @@ enum Tool: Int, CaseIterable {
         case .highlight: "Highlight (H)"
         case .text: "Text (T)"
         case .blur: "Blur (B)"
+        case .crop: "Crop (C)"
         }
     }
     var shortcut: String {
@@ -29,6 +31,7 @@ enum Tool: Int, CaseIterable {
         case .highlight: "h"
         case .text: "t"
         case .blur: "b"
+        case .crop: "c"
         }
     }
     var defaultColor: NSColor {
@@ -43,6 +46,8 @@ struct Annotation {
     var end: CGPoint
     var color: NSColor
     var text = ""
+    /// Crop only: the editor shows just this region (double-click).
+    var applied = false
 
     var rect: CGRect {
         CGRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(start.x - end.x), height: abs(start.y - end.y))
@@ -77,8 +82,16 @@ final class Renderer {
         ctx.restoreGState()
     }
 
+    /// The crop in effect: the last crop annotation, clamped to the image. Nil when there is none.
+    func effectiveCrop(_ items: [Annotation]) -> CGRect? {
+        guard let c = items.last(where: { $0.tool == .crop })?.rect else { return nil }
+        let r = c.intersection(CGRect(x: 0, y: 0, width: width, height: height)).integral
+        return r.width >= 8 && r.height >= 8 ? r : nil
+    }
+
     /// `ctx` must be flipped (origin top-left) and sized in image pixels.
-    func draw(_ items: [Annotation], in ctx: CGContext) {
+    /// `previewCrop` dims everything outside the crop; export passes false.
+    func draw(_ items: [Annotation], in ctx: CGContext, previewCrop: Bool = true) {
         drawBase(image, in: ctx)
         let line = CGFloat(Settings.lineWidth) * pixelScale
         for a in items {
@@ -97,7 +110,20 @@ final class Renderer {
                 drawBase(blurred, in: ctx)
             case .text:
                 drawText(a, in: ctx)
+            case .crop:
+                break   // applied below and at export
             }
+            ctx.restoreGState()
+        }
+        if previewCrop, let crop = effectiveCrop(items) {
+            ctx.saveGState()
+            ctx.setFillColor(NSColor.black.withAlphaComponent(0.55).cgColor)
+            ctx.addRect(CGRect(x: 0, y: 0, width: width, height: height))
+            ctx.addRect(crop)
+            ctx.fillPath(using: .evenOdd)
+            ctx.setStrokeColor(NSColor.white.cgColor)
+            ctx.setLineWidth(pixelScale)
+            ctx.stroke(crop)
             ctx.restoreGState()
         }
     }
@@ -142,12 +168,14 @@ final class Renderer {
 
     func render(_ items: [Annotation]) -> CGImage? {
         let space = image.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? CGColorSpace(name: CGColorSpace.sRGB)!
-        guard let ctx = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+        let crop = effectiveCrop(items) ?? CGRect(x: 0, y: 0, width: width, height: height)
+        guard let ctx = CGContext(data: nil, width: Int(crop.width), height: Int(crop.height), bitsPerComponent: 8,
                                   bytesPerRow: 0, space: space,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        ctx.translateBy(x: 0, y: height)
+        ctx.translateBy(x: 0, y: crop.height)
         ctx.scaleBy(x: 1, y: -1)
-        draw(items, in: ctx)
+        ctx.translateBy(x: -crop.minX, y: -crop.minY)
+        draw(items, in: ctx, previewCrop: false)
         return ctx.makeImage()
     }
 }
