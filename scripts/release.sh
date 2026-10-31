@@ -49,7 +49,7 @@ PRE=()
 
 NOTES="Open the **DMG** and drag **Snapmark** to Applications. (The zip holds the same app.)
 
-Snapmark is not notarized yet, so the first launch needs **right-click > Open**, or run \`xattr -dr com.apple.quarantine /Applications/Snapmark.app\`. Then grant Accessibility, Input Monitoring and Screen Recording when asked. Verify the download against \`SHA256SUMS.txt\`.
+Snapmark is not notarized yet, so macOS blocks the first launch ("Apple could not verify Snapmark is free of malware"). Open **System Settings > Privacy & Security**, scroll to **Security**, and click **Open Anyway** next to Snapmark. On macOS 15 and later, right-click > Open no longer works. Or run \`xattr -dr com.apple.quarantine /Applications/Snapmark.app\`. Then grant Accessibility, Input Monitoring and Screen Recording when asked. Verify the download against \`SHA256SUMS.txt\`.
 
 Requires macOS 15.2 or later."
 

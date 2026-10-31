@@ -72,8 +72,10 @@ version, which the background needs. The file name keeps the version.
 
 Snapmark is **not notarized** and has no Apple Developer ID. Two consequences:
 
-- **First launch:** downloaders must right-click > Open once (or run
-  `xattr -dr com.apple.quarantine /Applications/Snapmark.app`). The release notes say so.
+- **First launch:** macOS blocks it with "Apple could not verify Snapmark is free of malware".
+  Downloaders open System Settings > Privacy & Security, scroll to Security, and click
+  **Open Anyway**, or run `xattr -dr com.apple.quarantine /Applications/Snapmark.app`.
+  Right-click > Open no longer works on macOS 15 and later. The release notes say so.
 - **Permissions:** macOS keys Accessibility, Input Monitoring and Screen Recording to the
   signing identity. An ad-hoc signature changes every build, so users would be asked again
   after each update. Release builds should be signed with one stable certificate.
