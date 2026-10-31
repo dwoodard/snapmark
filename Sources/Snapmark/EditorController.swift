@@ -5,6 +5,8 @@ final class EditorController: NSObject, NSWindowDelegate {
     private let window: NSWindow
     private let canvas: CanvasView
     private let renderer: Renderer
+    private let sourceImage: CGImage
+    private let scanButton = NSButton()
     private let toolPicker = NSSegmentedControl()
     private let colorWell = NSColorWell()
     private let undoButton = NSButton()
@@ -12,6 +14,7 @@ final class EditorController: NSObject, NSWindowDelegate {
     let historyID: String?
     private let barHeight: CGFloat = 44
     private var lastSavedURL: URL?
+    private var scanResult: Scanner.Result?
     private var canvasWidth: NSLayoutConstraint!
     private var canvasHeight: NSLayoutConstraint!
 
@@ -38,6 +41,7 @@ final class EditorController: NSObject, NSWindowDelegate {
 
     init(capture: Capture.Result, historyID: String?, annotations: [Annotation] = []) {
         self.historyID = historyID
+        sourceImage = capture.image
         renderer = Renderer(image: capture.image, pixelScale: capture.pixelScale)
         canvas = CanvasView(renderer: renderer)
 
@@ -165,6 +169,8 @@ final class EditorController: NSObject, NSWindowDelegate {
         colorWell.widthAnchor.constraint(equalToConstant: 36).isActive = true
 
         configure(undoButton, symbol: "arrow.uturn.backward", title: "Undo", action: #selector(undoTapped))
+        configure(scanButton, symbol: "text.viewfinder", title: "Scan", action: #selector(scanTapped))
+        scanButton.toolTip = "Read text and QR codes in the capture"
         let external = NSButton(); configure(external, symbol: "arrow.up.forward.app", title: "Open in \(Settings.externalEditorName)", action: #selector(externalTapped))
         let folder = NSButton()
         configure(folder, symbol: "folder", title: "", action: #selector(folderTapped))
@@ -181,7 +187,7 @@ final class EditorController: NSObject, NSWindowDelegate {
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let stack = NSStackView(views: [toolPicker, colorWell, undoButton, spacer, trash, folder, external, save, copy])
+        let stack = NSStackView(views: [toolPicker, colorWell, undoButton, spacer, trash, scanButton, folder, external, save, copy])
         stack.orientation = .horizontal
         stack.spacing = 10
         stack.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
@@ -214,9 +220,77 @@ final class EditorController: NSObject, NSWindowDelegate {
     @objc private func saveTapped() { run(.save) }
     @objc private func copyTapped() { run(.copy) }
 
+    /// OCR + QR/link scan of the original capture (annotations excluded). Results show in a menu under the button.
+    @objc private func scanTapped() {
+        scanButton.isEnabled = false
+        let image = sourceImage
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = Scanner.scan(image)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.scanButton.isEnabled = true
+                self.showScanMenu(result)
+            }
+        }
+    }
+
+    private func showScanMenu(_ result: Scanner.Result) {
+        scanResult = result
+        let menu = NSMenu()
+        if result.isEmpty {
+            let none = NSMenuItem(title: "No text or codes found", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            menu.addItem(none)
+        }
+        for (i, url) in result.links.enumerated() {
+            let item = NSMenuItem(title: "Open \(url.absoluteString)", action: #selector(openScanLink(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = i
+            menu.addItem(item)
+        }
+        for (i, code) in result.codes.enumerated() {
+            let item = NSMenuItem(title: "Copy code: \(code.prefix(60))", action: #selector(copyScanCode(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = i
+            menu.addItem(item)
+        }
+        if !result.text.isEmpty {
+            if !menu.items.isEmpty { menu.addItem(.separator()) }
+            let words = result.text.split(whereSeparator: \.isWhitespace).count
+            let item = NSMenuItem(title: "Copy Text (\(words) words)", action: #selector(copyScanText), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: scanButton.bounds.height + 4), in: scanButton)
+    }
+
+    @objc private func openScanLink(_ sender: NSMenuItem) {
+        guard let url = scanResult?.links[safe: sender.tag] else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func copyScanCode(_ sender: NSMenuItem) {
+        guard let code = scanResult?.codes[safe: sender.tag] else { return }
+        copyString(code)
+    }
+
+    @objc private func copyScanText() {
+        if let text = scanResult?.text { copyString(text) }
+    }
+
+    private func copyString(_ s: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
+        Output.playSound()
+    }
+
     func windowWillClose(_ notification: Notification) {
         canvas.commitText()
         if let id = historyID { History.saveAnnotations(id, canvas.items) }
         onClose?(self)
     }
+}
+
+private extension Array {
+    subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
 }
