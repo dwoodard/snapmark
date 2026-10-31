@@ -57,7 +57,7 @@ final class SettingsController: NSObject {
         // Size the window to the tallest tab so no row is ever cut off.
         let tallest = grids.map { $0.1.fittingSize.height }.max() ?? 240
         let widest = grids.map { $0.1.fittingSize.width }.max() ?? 440
-        let size = NSSize(width: max(widest + 90, 540), height: tallest + 120)
+        let size = NSSize(width: max(widest + 90, 540), height: tallest + 120 + Self.headerHeight)
 
         let w = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                          styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -65,9 +65,14 @@ final class SettingsController: NSObject {
         w.isReleasedWhenClosed = false
         let content = NSView()
         tabs.translatesAutoresizingMaskIntoConstraints = false
+        let header = headerView()
+        header.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(header)
         content.addSubview(tabs)
         NSLayoutConstraint.activate([
-            tabs.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
+            header.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
+            header.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            tabs.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 12),
             tabs.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10),
             tabs.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
             tabs.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
@@ -76,6 +81,31 @@ final class SettingsController: NSObject {
         w.setContentSize(size)
         w.center()
         window = w
+    }
+
+    private static let headerHeight: CGFloat = 98
+
+    /// App icon with the name and version, centered above the tabs.
+    private func headerView() -> NSView {
+        let icon = NSImageView(image: NSApp.applicationIconImage)
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 80).isActive = true
+        let name = NSTextField(labelWithString: "Snapmark")
+        name.font = .systemFont(ofSize: 22, weight: .semibold)
+        let version = NSTextField(labelWithString: "Version \(Self.versionString)")
+        version.font = .systemFont(ofSize: 12)
+        version.textColor = .secondaryLabelColor
+        let text = NSStackView(views: [name, version])
+        text.orientation = .vertical
+        text.alignment = .leading
+        text.spacing = 2
+        let row = NSStackView(views: [icon, text])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 16
+        return row
     }
 
     private func tab(_ title: String, _ grid: NSGridView) -> NSTabViewItem {
