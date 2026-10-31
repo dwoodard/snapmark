@@ -124,22 +124,24 @@ glyphs from the logo with ImageMagick), `packaging/dmg/` (window background, reg
   then `ffprobe` for the tracks and `ffmpeg -af volumedetect` for the level. Delete test files you create in my
   screenshots folder.
 
+- GitHub's `/releases/latest` redirect can lag a few seconds after publishing, so an installer run right after a publish may
+  fetch the previous version. Wait a moment and run it again. The update check reads the same redirect.
+
 ## State and next steps
 
 - Done and released: capture, picker, editor with crop, recording with audio, viewer, recents, settings, DMG,
-  versioned releases (v0.2.0 latest), `scripts/install.sh` installer.
+  versioned releases (v0.2.1 latest), `scripts/install.sh` installer.
 - Released in v0.2.0: the update check. Settings > General has **Check for Updates** and a
   launch-time check (on by default, one HEAD request to `github.com/dwoodard/snapmark/releases/latest`, no personal data).
   A newer version adds an "Update Available" line at the top of the menu bar menu. The app does not install updates
   itself: it offers View Release and Copy Install Command (the README one-liner). It only ever counts published stable
   releases, never drafts or `-rc` builds. Logic is in `UpdateChecker.swift`.
-- Built, not yet released (on the feature branch): the real app icon, the menu bar glyphs and their states. Idle, armed
+- Released in v0.2.1: the real app icon, the menu bar glyphs and their states. Idle, armed
   (picker or the Edit / Record bar is open: accent blue), flash (0.7 s green shutter after a capture) and recording
   (red, stop square). `AppDelegate.refreshMenuBarIcon` is the one place that picks the state. Tints are painted in code
   (`MenuBarIcon.tinted`) because `contentTintColor` was not reliable. App icon and glyphs come from Dustin's logo, drawn from Dustin's logo (a red
   dragon wrapped around a camera lens). App icon: the logo on a dark tile. Menu bar: an idle template glyph (adapts to
   light and dark) and a red recording glyph with a stop square in the lens, shown while recording (click to stop).
-  Next release would be 0.2.1 (polish, patch).
 - Not built / ideas: a license file for the public repo (README exists); Apple notarization; the editor's Open in button defaulting to Preview when PhotoCraft is missing
   (planned for the next release); delete not trashing the PNG of a reopened quick capture; window-only capture (the picker
   captures the screen area under a window, so overlapping windows show); mic plus computer sound together is untested.
