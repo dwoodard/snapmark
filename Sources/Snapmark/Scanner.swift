@@ -3,8 +3,16 @@ import Vision
 
 /// Reads text (OCR) and QR/barcodes from a captured image with the Vision framework.
 enum Scanner {
+    /// One recognized word. `rect` is in image pixels with a top-left origin (same space as the canvas).
+    struct Word {
+        let text: String
+        let rect: CGRect
+        let line: Int
+    }
+
     struct Result {
         var text: String
+        var words: [Word]
         /// QR / barcode payloads, in detection order.
         var codes: [String]
         /// Web links found in the text and the codes, de-duplicated, in order.
@@ -21,7 +29,26 @@ enum Scanner {
 
         try? VNImageRequestHandler(cgImage: image, options: [:]).perform([textRequest, codeRequest])
 
-        let lines = (textRequest.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        var lines: [String] = []
+        var words: [Word] = []
+        let w = CGFloat(image.width), h = CGFloat(image.height)
+        for obs in textRequest.results ?? [] {
+            guard let cand = obs.topCandidates(1).first else { continue }
+            let line = lines.count
+            lines.append(cand.string)
+            let str = cand.string
+            var i = str.startIndex
+            while i < str.endIndex {
+                while i < str.endIndex, str[i].isWhitespace { i = str.index(after: i) }
+                let start = i
+                while i < str.endIndex, !str[i].isWhitespace { i = str.index(after: i) }
+                guard start < i, let box = try? cand.boundingBox(for: start..<i) else { continue }
+                let b = box.boundingBox   // normalized, bottom-left origin
+                words.append(Word(text: String(str[start..<i]),
+                                  rect: CGRect(x: b.minX * w, y: (1 - b.maxY) * h, width: b.width * w, height: b.height * h),
+                                  line: line))
+            }
+        }
         let text = lines.joined(separator: "\n")
         var codes: [String] = []
         for payload in (codeRequest.results ?? []).compactMap(\.payloadStringValue) where !codes.contains(payload) {
@@ -38,6 +65,6 @@ enum Scanner {
                 if let url = m.url { add(url) }
             }
         }
-        return Result(text: text, codes: codes, links: links)
+        return Result(text: text, words: words, codes: codes, links: links)
     }
 }

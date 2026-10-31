@@ -80,6 +80,7 @@ final class EditorController: NSObject, NSWindowDelegate {
         canvas.onItemsChanged = { [weak self] in self?.undoButton.isEnabled = self?.canvas.canUndo ?? false }
         canvas.onVisibleRectChanged = { [weak self] rect in self?.relayout(for: rect) }
         canvas.onToolKey = { [weak self] tool in self?.select(tool) }
+        canvas.onTextModeChanged = { [weak self] on in self?.scanButton.title = on ? "Done" : "Scan" }
         canvas.onCommand = { [weak self] cmd in self?.run(cmd) }
         select(Tool(rawValue: Settings.defaultTool) ?? .arrow)
         canvas.load(annotations)
@@ -170,7 +171,7 @@ final class EditorController: NSObject, NSWindowDelegate {
 
         configure(undoButton, symbol: "arrow.uturn.backward", title: "Undo", action: #selector(undoTapped))
         configure(scanButton, symbol: "text.viewfinder", title: "Scan", action: #selector(scanTapped))
-        scanButton.toolTip = "Read text and QR codes in the capture"
+        scanButton.toolTip = "Select text, open links and QR codes (Esc to leave)"
         let external = NSButton(); configure(external, symbol: "arrow.up.forward.app", title: "Open in \(Settings.externalEditorName)", action: #selector(externalTapped))
         let folder = NSButton()
         configure(folder, symbol: "folder", title: "", action: #selector(folderTapped))
@@ -204,6 +205,7 @@ final class EditorController: NSObject, NSWindowDelegate {
     }
 
     private func select(_ tool: Tool) {
+        canvas.scanWords = nil
         canvas.commitText()
         canvas.tool = tool
         toolPicker.selectedSegment = tool.rawValue
@@ -222,6 +224,7 @@ final class EditorController: NSObject, NSWindowDelegate {
 
     /// OCR + QR/link scan of the original capture (annotations excluded). Results show in a menu under the button.
     @objc private func scanTapped() {
+        if canvas.scanWords != nil { canvas.scanWords = nil; return }
         scanButton.isEnabled = false
         let image = sourceImage
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -236,6 +239,10 @@ final class EditorController: NSObject, NSWindowDelegate {
 
     private func showScanMenu(_ result: Scanner.Result) {
         scanResult = result
+        if !result.words.isEmpty { canvas.scanWords = result.words }
+        window.makeFirstResponder(canvas)
+        // Words are now selectable on the canvas. The menu only appears for links, codes, or an empty scan.
+        if !result.isEmpty && result.links.isEmpty && result.codes.isEmpty { return }
         let menu = NSMenu()
         if result.isEmpty {
             let none = NSMenuItem(title: "No text or codes found", action: nil, keyEquivalent: "")
@@ -257,7 +264,7 @@ final class EditorController: NSObject, NSWindowDelegate {
         if !result.text.isEmpty {
             if !menu.items.isEmpty { menu.addItem(.separator()) }
             let words = result.text.split(whereSeparator: \.isWhitespace).count
-            let item = NSMenuItem(title: "Copy Text (\(words) words)", action: #selector(copyScanText), keyEquivalent: "")
+            let item = NSMenuItem(title: "Copy All Text (\(words) words)", action: #selector(copyScanText), keyEquivalent: "")
             item.target = self
             menu.addItem(item)
         }

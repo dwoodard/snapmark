@@ -22,6 +22,32 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     private var lastVisible: CGRect = .null
     var onToolKey: ((Tool) -> Void)?
     var onCommand: ((EditorController.Command) -> Void)?
+    var onTextModeChanged: ((Bool) -> Void)?
+
+    /// Text-select mode: recognized words are boxed, dragging selects them, Cmd-C copies them. nil = off.
+    var scanWords: [Scanner.Word]? {
+        didSet {
+            selected = []
+            marqueeStart = nil
+            needsDisplay = true
+            onTextModeChanged?(scanWords != nil)
+        }
+    }
+    private var selected = Set<Int>()
+    private var marqueeStart: CGPoint?
+
+    /// Selected words in reading order, lines joined with newlines. All text when nothing is selected.
+    var textForCopy: String {
+        guard let words = scanWords else { return "" }
+        let idx = selected.isEmpty ? Array(words.indices) : selected.sorted()
+        var out = "", lastLine = -1
+        for i in idx {
+            if lastLine >= 0 { out += words[i].line == lastLine ? " " : "\n" }
+            out += words[i].text
+            lastLine = words[i].line
+        }
+        return out
+    }
 
     init(renderer: Renderer) {
         self.renderer = renderer
@@ -95,6 +121,29 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         renderer.draw(all, in: ctx)
         ctx.restoreGState()
         if tool == .crop, let crop = renderer.effectiveCrop(all) { drawHandles(for: crop, in: ctx) }
+        if let words = scanWords { drawWords(words, in: ctx) }
+    }
+
+    private func drawWords(_ words: [Scanner.Word], in ctx: CGContext) {
+        let v = shownRect, s = viewScale
+        for (i, w) in words.enumerated() {
+            let r = CGRect(x: (w.rect.minX - v.minX) * s, y: (w.rect.minY - v.minY) * s, width: w.rect.width * s, height: w.rect.height * s)
+            let on = selected.contains(i)
+            ctx.setFillColor(NSColor.systemBlue.withAlphaComponent(on ? 0.45 : 0.14).cgColor)
+            ctx.fill(r)
+            if !on {
+                ctx.setStrokeColor(NSColor.systemBlue.withAlphaComponent(0.45).cgColor)
+                ctx.setLineWidth(0.5)
+                ctx.stroke(r)
+            }
+        }
+    }
+
+    private func selectWords(from a: CGPoint, to b: CGPoint) {
+        guard let words = scanWords else { return }
+        let r = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y)).insetBy(dx: -1, dy: -1)
+        selected = Set(words.indices.filter { words[$0].rect.intersects(r) })
+        needsDisplay = true
     }
 
     private func drawHandles(for crop: CGRect, in ctx: CGContext) {
@@ -128,6 +177,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     }
 
     private func cursor(at p: CGPoint) -> NSCursor {
+        if scanWords != nil { return .iBeam }
         guard tool == .crop, let c = renderer.effectiveCrop(items), let hit = cropHit(p, c) else { return .crosshair }
         switch hit {
         case .move: return .openHand
@@ -141,6 +191,11 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         commitText()
         let p = imagePoint(event)
         mode = .draw
+        if scanWords != nil {
+            marqueeStart = p
+            selectWords(from: p, to: p)
+            return
+        }
         if event.clickCount == 2, tool == .crop, let c = renderer.effectiveCrop(items), c.contains(p) {
             // Double-click inside the crop: shrink the view to it.
             draft = nil
@@ -162,6 +217,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if let start = marqueeStart { selectWords(from: start, to: imagePoint(event)); return }
         guard draft != nil else { return }
         let raw = imagePoint(event)
         let bounds = shownRect
@@ -194,6 +250,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if marqueeStart != nil { marqueeStart = nil; return }
         guard let d = draft else { return }
         draft = nil
         defer { mode = .draw }
@@ -257,7 +314,10 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     // MARK: Keys
 
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { onCommand?(.close); return }
+        if event.keyCode == 53 {
+            if scanWords != nil { scanWords = nil } else { onCommand?(.close) }
+            return
+        }
         if let ch = event.charactersIgnoringModifiers?.lowercased(),
            let t = Tool.allCases.first(where: { $0.shortcut == ch }) {
             onToolKey?(t)
@@ -268,6 +328,13 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard textField == nil, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else {
             return super.performKeyEquivalent(with: event)
+        }
+        if scanWords != nil, event.charactersIgnoringModifiers == "c" {
+            let text = textForCopy
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            Output.playSound()
+            return true
         }
         switch event.charactersIgnoringModifiers {
         case "z": onCommand?(.undo)
