@@ -16,19 +16,39 @@ Snapmark takes over those three shortcuts while it runs. Turn any of them off in
 
 Requires **macOS 15.2 or later**. Apple silicon and Intel.
 
+### Option 1: one command (no warning from macOS)
+
+Paste this into Terminal:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dwoodard/snapmark/HEAD/scripts/install.sh | bash
+```
+
+It downloads the latest release, checks it against the published checksum, checks the app's signature, installs
+**Snapmark** to `/Applications` (or `~/Applications` if that isn't writable), and opens it. It needs no `sudo` and
+touches nothing else. You can read it first: [scripts/install.sh](scripts/install.sh). Running it is you choosing to
+trust Snapmark.
+
+Why this avoids the macOS warning: Snapmark is not notarized, and macOS blocks unnotarized apps that were downloaded
+by a browser. Files downloaded with `curl` aren't marked that way, so there is nothing to block. To install an older
+version, run `SNAPMARK_VERSION=0.1.1 bash` in place of `bash`, for example
+`curl -fsSL ... | SNAPMARK_VERSION=0.1.1 bash`. To uninstall, delete `Snapmark.app`.
+
+### Option 2: download the DMG
+
 1. Download the DMG from the [latest release](https://github.com/dwoodard/snapmark/releases/latest).
 2. Open it and drag **Snapmark** onto **Applications**. Eject the DMG, and run the app from Applications, not from the DMG.
-3. Open Snapmark. macOS will say *"Apple could not verify Snapmark is free of malware"*, because the app is not
-   notarized yet. This is a one-time step:
+3. Open Snapmark. macOS will say *"Apple could not verify Snapmark is free of malware"*. This is a one-time step:
    - Click **Done** (not Move to Trash).
    - Open **System Settings > Privacy & Security**, scroll to **Security**, and click **Open Anyway** next to Snapmark.
    - Or run `xattr -dr com.apple.quarantine /Applications/Snapmark.app` in Terminal.
 
    On macOS 15 and later, right-click > Open does not work for unnotarized apps.
-4. Grant the permissions below when macOS asks. A camera icon appears in the menu bar. If it looks dimmed, a
-   permission is still missing, and it wakes up within a couple of seconds of you granting it.
 
-You can check the download against `SHA256SUMS.txt` on the release page: `shasum -a 256 -c SHA256SUMS.txt`.
+You can check a download against `SHA256SUMS.txt` on the release page: `shasum -a 256 -c SHA256SUMS.txt`.
+
+After either option, a camera icon appears in the menu bar. If it looks dimmed, a permission is still missing, and it
+wakes up within a couple of seconds of you granting it.
 
 ### Permissions
 

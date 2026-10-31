@@ -36,6 +36,9 @@ Repo: github.com/dwoodard/snapmark (public). Releases: v0.1.0, v0.1.1 (latest).
 
 - One version source, the `VERSION` file. Tags are `v0.MINOR.PATCH`. New features bump minor, fixes only bump patch,
   test builds use `-rc.N` and are marked pre-release.
+- `scripts/install.sh` is the curl-based installer from the README (no browser download, so no quarantine flag and no
+  Gatekeeper block). It installs the latest release and checks the checksum and signature. It is served from the default
+  branch, not attached to releases. Verified: a curl download has no quarantine flag.
 - A **published version is never changed** (assets or tag). Fix forward with the next version. Editing release notes
   text is fine.
 - Releases are created as drafts, checked, then published by hand. Publishing creates the tag.
