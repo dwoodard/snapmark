@@ -1,6 +1,6 @@
 #!/bin/bash
-# Builds the menu bar glyphs from the logo: MenuBarIdle.png (template, adapts to light and dark menu bars)
-# and MenuBarRecording.png (red, with a stop square in the lens). Needs ImageMagick. Outputs are committed.
+# Builds the menu bar glyphs from the logo: MenuBarIdle.png and MenuBarFlash.png (templates, adapt to light and
+# dark menu bars) and MenuBarRecording.png (red, with a stop square in the lens). Needs ImageMagick. Outputs are committed.
 set -euo pipefail
 cd "$(dirname "$0")"
 S=../icon/source/logo-subject.png
@@ -22,9 +22,13 @@ magick "$T/shape.png" "$T/lens.png" -compose Minus_Src -composite -crop "$CROP" 
 magick "$T/mask.png" -fill black -draw "circle $LENS $LENS_EDGE" -filter Lanczos -resize "${SIZE}x${SIZE}" "$T/m.png"
 magick -size "${SIZE}x${SIZE}" xc:black "$T/m.png" -compose CopyOpacity -composite MenuBarIdle.png
 
+# flash: the same glyph with the lens filled in, shown for a moment after a capture
+magick "$T/shape.png" -crop "$CROP" +repage -filter Lanczos -resize "${SIZE}x${SIZE}" "$T/f.png"
+magick -size "${SIZE}x${SIZE}" xc:black "$T/f.png" -compose CopyOpacity -composite MenuBarFlash.png
+
 # recording: red glyph, white lens, red stop square in the lens
 magick -size 880x880 xc:'#FF3B30' "$T/mask.png" -compose CopyOpacity -composite \
     -fill white -draw "circle $LENS $LENS_EDGE" \
     -fill '#FF3B30' -draw "roundrectangle 366,526 526,686 26,26" \
     -filter Lanczos -resize "${SIZE}x${SIZE}" MenuBarRecording.png
-echo "Wrote MenuBarIdle.png and MenuBarRecording.png"
+echo "Wrote MenuBarIdle.png, MenuBarFlash.png and MenuBarRecording.png"

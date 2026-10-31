@@ -133,7 +133,10 @@ glyphs from the logo with ImageMagick), `packaging/dmg/` (window background, reg
   A newer version adds an "Update Available" line at the top of the menu bar menu. The app does not install updates
   itself: it offers View Release and Copy Install Command (the README one-liner). It only ever counts published stable
   releases, never drafts or `-rc` builds. Logic is in `UpdateChecker.swift`.
-- Built, not yet released (on the feature branch): the real app icon and menu bar glyphs, drawn from Dustin's logo (a red
+- Built, not yet released (on the feature branch): the real app icon, the menu bar glyphs and their states. Idle, armed
+  (picker or the Edit / Record bar is open: accent blue), flash (0.7 s green shutter after a capture) and recording
+  (red, stop square). `AppDelegate.refreshMenuBarIcon` is the one place that picks the state. Tints are painted in code
+  (`MenuBarIcon.tinted`) because `contentTintColor` was not reliable. App icon and glyphs come from Dustin's logo, drawn from Dustin's logo (a red
   dragon wrapped around a camera lens). App icon: the logo on a dark tile. Menu bar: an idle template glyph (adapts to
   light and dark) and a red recording glyph with a stop square in the lens, shown while recording (click to stop).
   Next release would be 0.2.1 (polish, patch).

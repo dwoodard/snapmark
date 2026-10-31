@@ -12,7 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = MenuBarIcon.idle
+        actionBar.onDismiss = { [weak self] in self?.refreshMenuBarIcon() }
+        refreshMenuBarIcon()
         mainMenu = buildMenu()
         statusItem.menu = mainMenu
         recorder.onUnexpectedStop = { [weak self] in self?.stopRecording() }
@@ -117,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             selector = RegionSelector { [weak self] rect in
                 guard let self else { return }
                 self.selector = nil
+                defer { self.refreshMenuBarIcon() }
                 guard let rect else { return }
                 if edit {
                     self.actionBar.show(near: rect,
@@ -127,7 +129,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             }
             selector?.begin()
+            refreshMenuBarIcon()
         }
+    }
+
+    private var flashUntil = Date.distantPast
+
+    /// One place decides the menu bar glyph from what is going on, so states never fight each other.
+    private func refreshMenuBarIcon() {
+        guard let button = statusItem?.button else { return }
+        let state: MenuBarIcon.State
+        if recorder.isRecording { state = .recording }
+        else if flashUntil > Date() { state = .flash }
+        else if selector != nil || actionBar.isShowing { state = .armed }
+        else { state = .idle }
+        MenuBarIcon.apply(state, to: button)
+    }
+
+    /// A quick shutter flash to confirm a capture was taken.
+    private func flashCapture() {
+        flashUntil = Date().addingTimeInterval(0.7)
+        refreshMenuBarIcon()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self] in self?.refreshMenuBarIcon() }
     }
 
     // MARK: Recording
@@ -156,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 Permissions.alert("The recording did not produce a video file. Check Screen Recording permission and try again.")
                 return
             }
+            self.flashCapture()
             _ = await History.addVideo(url)
             if Settings.copyToClipboard {
                 NSPasteboard.general.clearContents()
@@ -173,18 +197,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let button = statusItem.button else { return }
         if on {
             statusItem.menu = nil
-            button.image = MenuBarIcon.recording
-            button.toolTip = "Recording. Click to stop."
-            button.contentTintColor = nil
             button.target = self
             button.action = #selector(stopRecordingTapped)
         } else {
-            button.image = MenuBarIcon.idle
-            button.toolTip = nil
-            button.contentTintColor = nil
             button.action = nil
             statusItem.menu = mainMenu
         }
+        refreshMenuBarIcon()
     }
 
     private func openEditor(_ result: Capture.Result, historyID: String?, annotations: [Annotation] = []) {
@@ -283,6 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 do {
                     let result = try await Capture.image(appKitRect: rect)
                     let historyID = History.add(result)
+                    self.flashCapture()
                     if edit {
                         self.openEditor(result, historyID: historyID)
                     } else {

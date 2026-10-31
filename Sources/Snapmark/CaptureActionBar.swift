@@ -3,6 +3,8 @@ import AppKit
 /// Small floating bar shown next to a selected region: edit a screenshot or record video.
 final class CaptureActionBar {
     private var panel: NSPanel?
+    var onDismiss: (() -> Void)?
+    var isShowing: Bool { panel != nil }
     private var outline: NSWindow?
     private var onEdit: (() -> Void)?
     private var onRecord: (() -> Void)?
@@ -74,6 +76,7 @@ final class CaptureActionBar {
         outline?.orderOut(nil)
         panel = nil
         outline = nil
+        onDismiss?()
     }
 
     private func button(_ title: String, _ symbol: String, _ action: Selector, key: String) -> NSButton {

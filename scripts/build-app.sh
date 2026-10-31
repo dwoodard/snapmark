@@ -27,7 +27,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Snapmark"
 cp packaging/icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-cp packaging/menubar/MenuBarIdle.png packaging/menubar/MenuBarRecording.png "$APP/Contents/Resources/"
+cp packaging/menubar/MenuBarIdle.png packaging/menubar/MenuBarFlash.png packaging/menubar/MenuBarRecording.png "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
