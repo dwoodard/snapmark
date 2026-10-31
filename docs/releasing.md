@@ -41,7 +41,9 @@ The version shows in Settings > General, and in `Info.plist` as `CFBundleShortVe
    `.github/workflows/release.yml`. To run the same thing from your Mac instead,
    push the branch and run `scripts/release.sh` (needs `gh` signed in).
 3. **Wait for the draft.** It is tagged `v0.2.0` (the tag appears when you publish), with:
-   - `snapmark-<version>-macos-universal.zip` (Apple silicon + Intel)
+   - `snapmark-<version>-macos-universal.dmg` (Apple silicon + Intel): a window with Snapmark and an
+     Applications link to drag onto, signed with the same identity as the app
+   - `snapmark-<version>-macos-universal.zip` (the same app, zipped)
    - `SHA256SUMS.txt`
    - notes generated from the commits, with install steps on top
 4. **Check it.** Download the zip, unzip it, open it, and take one screenshot and one recording.
@@ -53,6 +55,18 @@ Pushing to `release` again before you publish rebuilds the same draft and replac
 **Test runs:** *Actions > Release > Run workflow* with a `version` such as `0.2.0-rc.1`
 overrides `VERSION` for that run only. Locally, `SNAPMARK_VERSION=0.2.0-rc.1 scripts/release.sh`.
 `scripts/release.sh --dry-run` builds and packages into `dist/` without touching GitHub.
+
+## The DMG
+
+`scripts/make-dmg.sh <app> <out.dmg>` stages `Snapmark.app`, an `Applications` link and the window
+background (`packaging/dmg/background.tiff`), then uses Finder to place the icons and hide the
+toolbar before compressing the image and signing it. The volume is named `Snapmark` without the
+version, which the background needs. The file name keeps the version.
+
+- Regenerate the background with `packaging/dmg/make-background.sh` (needs ImageMagick). The
+  output is committed, so building a DMG does not need it.
+- Styling the window needs Finder. If it fails, the script warns and still builds a working,
+  unstyled DMG. The first run from a new terminal may ask you to let it control Finder.
 
 ## Signing
 

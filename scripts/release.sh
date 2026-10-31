@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds a universal, signed Snapmark.app, zips it with a checksum file, and creates or updates
+# Builds a universal, signed Snapmark.app, packages it as a DMG and a zip with a checksum file, and creates or updates
 # a DRAFT GitHub release named "Snapmark v<version>". Nothing is public until you publish the draft.
 #   --dry-run   build and package into dist/ only, no GitHub calls
 # The version comes from the VERSION file. SNAPMARK_VERSION overrides it for a test run.
@@ -33,9 +33,11 @@ SNAPMARK_VERSION="$VERSION" ./scripts/build-app.sh --universal
 rm -rf dist
 mkdir -p dist
 ZIP="snapmark-$VERSION-macos-universal.zip"
+DMG="snapmark-$VERSION-macos-universal.dmg"
 ditto -c -k --keepParent build/Snapmark.app "dist/$ZIP"
-(cd dist && shasum -a 256 "$ZIP" > SHA256SUMS.txt)
-echo "Packaged dist/$ZIP"
+./scripts/make-dmg.sh build/Snapmark.app "dist/$DMG"
+(cd dist && shasum -a 256 "$DMG" "$ZIP" > SHA256SUMS.txt)
+echo "Packaged dist/$DMG and dist/$ZIP"
 
 if [[ "$DRY" == 1 ]]; then
     echo "Dry run: skipped GitHub."
@@ -45,17 +47,17 @@ fi
 PRE=()
 [[ "$VERSION" == *-* ]] && PRE=(--prerelease)
 
-NOTES="Unzip and drag **Snapmark.app** to Applications.
+NOTES="Open the **DMG** and drag **Snapmark** to Applications. (The zip holds the same app.)
 
 Snapmark is not notarized yet, so the first launch needs **right-click > Open**, or run \`xattr -dr com.apple.quarantine /Applications/Snapmark.app\`. Then grant Accessibility, Input Monitoring and Screen Recording when asked. Verify the download against \`SHA256SUMS.txt\`.
 
 Requires macOS 15.2 or later."
 
 if gh release view "$TAG" >/dev/null 2>&1; then
-    gh release upload "$TAG" "dist/$ZIP" dist/SHA256SUMS.txt --clobber
+    gh release upload "$TAG" "dist/$DMG" "dist/$ZIP" dist/SHA256SUMS.txt --clobber
     echo "Updated the draft $TAG."
 else
-    gh release create "$TAG" "dist/$ZIP" dist/SHA256SUMS.txt \
+    gh release create "$TAG" "dist/$DMG" "dist/$ZIP" dist/SHA256SUMS.txt \
         --draft ${PRE[@]+"${PRE[@]}"} \
         --target "$(git rev-parse HEAD)" \
         --title "Snapmark v$VERSION" \
